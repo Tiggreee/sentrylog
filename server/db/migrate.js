@@ -8,7 +8,13 @@ const sql = fs.readFileSync(path.join(__dirname, 'migrate.sql'), 'utf8');
 pool.query(sql).then(() => {
   pool.end();
 }).catch((err) => {
-  console.error(err.message);
+  if (err && Array.isArray(err.errors) && err.errors.length) {
+    console.error(err.errors.map((item) => item.message).join(' | '));
+  } else if (err && err.message) {
+    console.error(err.message);
+  } else {
+    console.error('Database migration failed');
+  }
   pool.end();
   process.exit(1);
 });
