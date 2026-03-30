@@ -15,6 +15,16 @@ function toInteger(value, fallback) {
   return Number.isNaN(parsed) ? fallback : parsed;
 }
 
+function toRequiredInteger(value, fieldName) {
+  const parsed = Number.parseInt(value, 10);
+
+  if (Number.isNaN(parsed) || parsed <= 0) {
+    throw createHttpError(400, `${fieldName} must be a positive integer`);
+  }
+
+  return parsed;
+}
+
 function normalizeResolved(value) {
   if (value === undefined) {
     return undefined;
@@ -76,7 +86,7 @@ async function listEvents({ cameraId, type, from, to, limit = 50 }) {
   const values = [];
 
   if (cameraId) {
-    values.push(toInteger(cameraId));
+    values.push(toRequiredInteger(cameraId, 'camera_id'));
     filters.push(`e.camera_id = $${values.length}`);
   }
 
@@ -168,24 +178,51 @@ async function listAlerts({ resolved, limit = 20 }) {
 }
 
 async function getAlertById(alertId) {
-  const rows = await listAlerts({ limit: 100, resolved: undefined });
-  return rows.find((alert) => alert.id === alertId) || null;
+  const query = `
+    SELECT
+      a.id,
+      a.severity,
+      a.resolved,
+      a.created_at,
+      e.id AS event_id,
+      e.type AS event_type,
+      e.timestamp,
+      e.metadata,
+      c.id AS camera_id,
+      c.name AS camera_name,
+      c.location AS camera_location,
+      v.id AS vehicle_id,
+      v.plate,
+      v.color,
+      v.type AS vehicle_type,
+      v.appearance_count
+    FROM alerts a
+    JOIN events e ON e.id = a.event_id
+    JOIN cameras c ON c.id = a.camera_id
+    LEFT JOIN vehicles v ON v.id = e.vehicle_id
+    WHERE a.id = $1
+    LIMIT 1;
+  `;
+
+  const { rows } = await pool.query(query, [alertId]);
+  return rows[0] || null;
 }
 
 async function resolveAlert(alertId) {
+  const safeAlertId = toRequiredInteger(alertId, 'alert_id');
   const query = `
     UPDATE alerts
     SET resolved = TRUE
     WHERE id = $1
     RETURNING id;
   `;
-  const { rowCount } = await pool.query(query, [alertId]);
+  const { rowCount } = await pool.query(query, [safeAlertId]);
 
   if (!rowCount) {
     throw createHttpError(404, 'Alert not found');
   }
 
-  return getAlertById(alertId);
+  return getAlertById(safeAlertId);
 }
 
 function buildVehiclePayload(input) {
