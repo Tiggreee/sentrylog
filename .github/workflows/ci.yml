@@ -1,4 +1,4 @@
-name: ci
+name: CI
 
 on:
   push:
@@ -7,27 +7,54 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   quality:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Client checks
-        run: |
-          if [ -f client/package.json ]; then
-            cd client
-            npm ci || npm install
-            npm run build --if-present
-            npm test --if-present
-          fi
-      - name: Server checks
-        run: |
-          if [ -f server/package.json ]; then
-            cd server
-            npm ci || npm install
-            npm run build --if-present
-            npm test --if-present
-          fi
+
+      - name: Client install
+        working-directory: client
+        run: npm ci --no-audit --no-fund
+
+      - name: Client lint
+        working-directory: client
+        run: npm run lint --if-present
+
+      - name: Client build
+        working-directory: client
+        run: npm run build --if-present
+
+      - name: Client tests
+        working-directory: client
+        run: npm test --if-present
+
+      - name: Server install
+        working-directory: server
+        run: npm ci --no-audit --no-fund
+
+      - name: Server lint
+        working-directory: server
+        run: npm run lint --if-present
+
+      - name: Server build
+        working-directory: server
+        run: npm run build --if-present
+
+      - name: Server tests
+        working-directory: server
+        run: npm test --if-present
