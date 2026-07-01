@@ -1,0 +1,33 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Client checks
+        run: |
+          if [ -f client/package.json ]; then
+            cd client
+            npm ci || npm install
+            npm run build --if-present
+            npm test --if-present
+          fi
+      - name: Server checks
+        run: |
+          if [ -f server/package.json ]; then
+            cd server
+            npm ci || npm install
+            npm run build --if-present
+            npm test --if-present
+          fi
